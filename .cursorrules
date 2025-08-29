@@ -1,0 +1,318 @@
+# PollMaster - Next.js Polling App Rules
+
+## 🏗️ Project Structure & Architecture
+
+### Route Groups & Layouts
+- Use Next.js 15 App Router with route groups: `(auth)` for authentication pages, `(dashboard)` for authenticated pages
+- Dashboard layout (`app/(dashboard)/layout.tsx`) provides header/footer for all authenticated pages
+- Auth pages (`app/(auth)/`) have clean design without header/footer
+- All polls pages must be inside `app/(dashboard)/polls/` to inherit dashboard layout
+
+### File Organization
+```
+app/
+├── (auth)/              # Authentication pages (login, register, forgot-password)
+├── (dashboard)/         # Authenticated pages with header/footer
+│   ├── layout.tsx      # Dashboard layout with navigation
+│   ├── dashboard/      # Main dashboard page
+│   └── polls/          # All poll-related pages
+├── components/          # Reusable components
+│   ├── ui/            # Shadcn/ui base components
+│   └── forms/         # Form components
+├── contexts/           # React contexts (AuthContext)
+├── lib/               # Utilities and configurations
+└── types/             # TypeScript type definitions
+```
+
+## 🎨 UI & Styling Patterns
+
+### Design System
+- Use **gradient backgrounds** for page containers: `bg-gradient-to-br from-[color]-50 via-[color]-50 to-[color]-100`
+- Implement **glass morphism** for cards: `bg-white/80 backdrop-blur-sm border-0 shadow-xl`
+- Use **consistent spacing**: `space-y-6`, `space-y-8` for form sections, `gap-6` for grids
+- Apply **hover effects**: `hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1`
+
+### Color Themes by Page
+- **Authentication pages**: Blue gradients (`from-blue-50 via-indigo-50 to-purple-50`)
+- **Dashboard**: Indigo-purple-pink gradients (`from-indigo-50 via-purple-50 to-pink-100`)
+- **Polls listing**: Slate-blue-indigo gradients (`from-slate-50 via-blue-50 to-indigo-100`)
+- **Create poll**: Emerald-teal-cyan gradients (`from-emerald-50 via-teal-50 to-cyan-100`)
+- **Individual poll**: Purple-pink-rose gradients (`from-purple-50 via-pink-50 to-rose-100`)
+
+### Component Styling
+- **Cards**: Always use `Card` with `shadow-xl border-0 bg-white/80 backdrop-blur-sm`
+- **Buttons**: Use gradient backgrounds for primary actions: `bg-gradient-to-r from-[color]-600 to-[color]-600 hover:from-[color]-700 hover:to-[color]-700`
+- **Inputs**: Use `h-12 px-4` for consistent height, focus states with color-specific rings
+- **Icons**: Include SVG icons with consistent sizing (`w-5 h-5`, `w-6 h-6`)
+
+## 📝 Form Patterns
+
+### Form Structure
+```typescript
+"use client"
+import { useState } from "react"
+import { Button } from "@/app/components/ui/button"
+import { Input } from "@/app/components/ui/input"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card"
+
+export default function FormComponent() {
+  const [formData, setFormData] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError("")
+    
+    try {
+      // Form logic here
+    } catch (error) {
+      setError("Error message")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+      <CardHeader className="text-center pb-6">
+        <CardTitle className="text-2xl font-bold text-gray-900">Form Title</CardTitle>
+        <CardDescription className="text-lg text-gray-600">Form description</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Form fields */}
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+```
+
+### Form Validation
+- Use **client-side validation** with useState for error handling
+- Display errors in styled error containers with icons
+- Implement **loading states** with disabled form elements
+- Use **controlled components** with value and onChange handlers
+
+### Form Fields Pattern
+```typescript
+<div className="space-y-3">
+  <label htmlFor="fieldName" className="text-lg font-semibold text-gray-700 flex items-center">
+    <svg className="w-5 h-5 mr-2 text-[color]-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* SVG path */}
+    </svg>
+    Field Label *
+  </label>
+  <Input
+    id="fieldName"
+    value={value}
+    onChange={(e) => setValue(e.target.value)}
+    placeholder="Placeholder text"
+    className="h-12 px-4 border-gray-300 focus:border-[color]-500 focus:ring-[color]-500"
+    required
+  />
+</div>
+```
+
+## 🔐 Authentication & Supabase Patterns
+
+### AuthContext Usage
+```typescript
+"use client"
+import { useAuth } from "@/app/contexts/AuthContext"
+
+export default function Component() {
+  const { user, loading, signIn, signOut } = useAuth()
+  
+  // Always check loading state first
+  if (loading) {
+    return <LoadingSpinner />
+  }
+  
+  if (!user) {
+    // Handle unauthenticated state
+  }
+}
+```
+
+### Supabase Client
+- Use `createClient()` from `@/app/lib/supabase` for all database operations
+- Always wrap operations in try-catch blocks
+- Return error objects in format: `{ error: { message: string } }`
+- Use proper TypeScript types for Supabase responses
+
+### Authentication Flow
+- **Login/Register**: Use `signIn`/`signUp` from AuthContext
+- **Route Protection**: Use middleware or useEffect in layouts
+- **Session Management**: AuthContext handles session state automatically
+- **Error Handling**: Display user-friendly error messages
+
+## 🎯 Page Structure Patterns
+
+### Page Container
+```typescript
+export default function PageName() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[color]-50 via-[color]-50 to-[color]-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Hero Section */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">Page Title</h1>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto">Page description</p>
+        </div>
+        
+        {/* Main Content */}
+      </div>
+    </div>
+  )
+}
+```
+
+### Loading States
+```typescript
+if (loading) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[color]-50 via-[color]-50 to-[color]-100 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-[color]-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    </div>
+  )
+}
+```
+
+## 🚀 Component Patterns
+
+### Interactive Elements
+- Use **group hover effects** for interactive cards: `group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1`
+- Implement **progress bars** with gradients: `bg-gradient-to-r from-[color]-500 to-[color]-500`
+- Use **status badges** with color coding: `px-3 py-1 bg-[color]-100 text-[color]-800 rounded-full text-xs font-medium`
+
+### Navigation
+- Use **Next.js Link** for internal navigation
+- Implement **back navigation** with consistent styling
+- Use **breadcrumbs** for complex navigation paths
+
+### Data Display
+- Use **grid layouts** for data cards: `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6`
+- Implement **stats cards** with icons and metrics
+- Use **activity feeds** with user avatars and timestamps
+
+## 📱 Responsive Design
+
+### Mobile-First Approach
+- Use **flexible grids**: `grid-cols-1 md:grid-cols-2 lg:grid-cols-3`
+- Implement **responsive navigation**: `hidden md:flex` for desktop-only elements
+- Use **responsive text sizes**: `text-4xl md:text-5xl`
+- Apply **responsive spacing**: `px-4 sm:px-6 lg:px-8`
+
+### Breakpoint Strategy
+- **Mobile**: Default styles (no prefix)
+- **Tablet**: `sm:` prefix (640px+)
+- **Desktop**: `md:` prefix (768px+)
+- **Large Desktop**: `lg:` prefix (1024px+)
+
+## 🔧 Development Patterns
+
+### Import Organization
+```typescript
+"use client" // If needed
+
+// React imports
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+
+// Component imports
+import { Button } from "@/app/components/ui/button"
+import { Input } from "@/app/components/ui/input"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card"
+
+// Hook imports
+import { useAuth } from "@/app/contexts/AuthContext"
+
+// Utility imports
+import { cn } from "@/app/lib/utils"
+```
+
+### Error Handling
+```typescript
+try {
+  const result = await operation()
+  return result
+} catch (error) {
+  console.error('Operation failed:', error)
+  return { error: { message: 'User-friendly error message' } }
+}
+```
+
+### TypeScript Patterns
+- Define **interfaces** for all form data and API responses
+- Use **proper typing** for Supabase operations
+- Avoid `any` type - use specific types or `unknown`
+- Export types from `app/types/index.ts`
+
+## 🎨 Icon Usage
+
+### SVG Icon Pattern
+```typescript
+<svg className="w-5 h-5 text-[color]-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="..." />
+</svg>
+```
+
+### Icon Sizes
+- **Small**: `w-4 h-4` (16px)
+- **Medium**: `w-5 h-5` (20px)
+- **Large**: `w-6 h-6` (24px)
+- **Extra Large**: `w-8 h-8` (32px)
+
+## 🚨 Common Anti-Patterns to Avoid
+
+### ❌ Don't Do
+- Don't use `any` type in TypeScript
+- Don't forget loading states in forms
+- Don't skip error handling in async operations
+- Don't use inline styles - use Tailwind classes
+- Don't forget responsive design
+- Don't skip accessibility features
+
+### ✅ Do This Instead
+- Use proper TypeScript interfaces
+- Always implement loading states
+- Wrap async operations in try-catch
+- Use Tailwind CSS classes consistently
+- Test on multiple screen sizes
+- Include proper ARIA labels and semantic HTML
+
+## 🧪 Testing Patterns
+
+### Component Testing
+- Test form validation logic
+- Test loading states
+- Test error handling
+- Test responsive behavior
+- Test accessibility features
+
+### Integration Testing
+- Test authentication flow
+- Test form submissions
+- Test navigation between pages
+- Test data persistence
+
+## 📝 Documentation
+
+### Code Comments
+- Add JSDoc comments for complex functions
+- Document component props with TypeScript interfaces
+- Explain business logic with inline comments
+- Document API endpoints and data structures
+
+### README Updates
+- Update README when adding new features
+- Document environment variables
+- Include setup instructions
+- Add troubleshooting section
