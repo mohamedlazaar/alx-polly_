@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/contexts/AuthContext";
@@ -18,7 +18,11 @@ export const metadata: Metadata = {
   description: "A modern polling application for creating, sharing, and participating in polls with real-time results.",
   keywords: ["polls", "voting", "surveys", "feedback", "decisions"],
   authors: [{ name: "Polling App Team" }],
-  viewport: "width=device-width, initial-scale=1",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

@@ -1,29 +1,27 @@
 "use client"
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Input } from '@/app/components/ui/input'
 import { useAuth } from '@/app/contexts/AuthContext'
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { signIn } = useAuth()
-  const router = useRouter()
+  const [message, setMessage] = useState('')
+  const { resetPassword } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setMessage('')
 
-    // Basic validation
-    if (!email || !password) {
-      setError('Please fill in all fields')
+    if (!email.trim()) {
+      setError('Email is required')
       setLoading(false)
       return
     }
@@ -34,31 +32,36 @@ export default function LoginPage() {
       return
     }
 
-    const { error } = await signIn(email, password)
+    const { error } = await resetPassword(email)
     
     if (error) {
-      setError(error.message || 'Failed to sign in')
+      setError(error.message || 'Failed to send reset email')
       setLoading(false)
     } else {
-      // Success - redirect will be handled by middleware
-      router.push('/polls')
+      setMessage('Check your email for a password reset link!')
+      setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-red-50 to-pink-50">
       <div className="w-full max-w-md px-4">
         {/* Logo/Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to your polling account</p>
+          <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Reset Password</h1>
+          <p className="text-gray-600">Enter your email to receive a reset link</p>
         </div>
 
         <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-xl text-center font-semibold">Sign In</CardTitle>
+            <CardTitle className="text-xl text-center font-semibold">Forgot Password?</CardTitle>
             <CardDescription className="text-center text-gray-500">
-              Enter your credentials to access your account
+              No worries, we'll send you reset instructions
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -73,6 +76,16 @@ export default function LoginPage() {
                   </div>
                 </div>
               )}
+              {message && (
+                <div className="p-4 text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    {message}
+                  </div>
+                </div>
+              )}
               
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-medium text-gray-700">
@@ -81,34 +94,18 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
+                  placeholder="Enter your email address"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
-                  className="h-12 px-4 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={loading}
-                  className="h-12 px-4 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  className="h-12 px-4 border-gray-300 focus:border-orange-500 focus:ring-orange-500"
                   required
                 />
               </div>
               
               <Button 
                 type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200" 
+                className="w-full h-12 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200" 
                 disabled={loading}
               >
                 {loading ? (
@@ -117,10 +114,10 @@ export default function LoginPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Signing in...
+                    Sending...
                   </div>
                 ) : (
-                  'Sign In'
+                  'Send Reset Link'
                 )}
               </Button>
             </form>
@@ -134,22 +131,13 @@ export default function LoginPage() {
               </div>
             </div>
             
-            <div className="space-y-3">
-              <Link href="/register">
-                <Button 
-                  variant="outline" 
-                  className="w-full h-12 border-gray-300 hover:bg-gray-50 font-medium"
-                >
-                  Create New Account
-                </Button>
-              </Link>
-              
-              <Link href="/forgot-password">
+            <div className="text-center">
+              <Link href="/login">
                 <Button 
                   variant="ghost" 
-                  className="w-full h-12 text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-medium"
+                  className="w-full h-12 text-orange-600 hover:text-orange-700 hover:bg-orange-50 font-medium"
                 >
-                  Forgot your password?
+                  Back to sign in
                 </Button>
               </Link>
             </div>
@@ -157,7 +145,7 @@ export default function LoginPage() {
         </Card>
         
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>By signing in, you agree to our Terms of Service and Privacy Policy</p>
+          <p>Remember your password? <Link href="/login" className="text-orange-600 hover:text-orange-700 font-medium">Sign in here</Link></p>
         </div>
       </div>
     </div>

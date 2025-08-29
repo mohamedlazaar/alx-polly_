@@ -6,54 +6,69 @@ export async function middleware(request: NextRequest) {
     request,
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
+  try {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+            supabaseResponse = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            )
+          },
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
+      }
+    )
+
+    // Get user session
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error) {
+      console.error('Middleware auth error:', error)
     }
-  )
 
-  // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
+    const { pathname } = request.nextUrl
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    // Protected routes that require authentication
+    const protectedRoutes = ['/polls/create', '/dashboard']
+    const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
-  // If there's no user and the user is trying to access a protected route
-  if (!user && (
-    request.nextUrl.pathname.startsWith('/polls/create') ||
-    request.nextUrl.pathname.startsWith('/dashboard')
-  )) {
-    const redirectUrl = new URL('/login', request.url)
-    return NextResponse.redirect(redirectUrl)
+    // Auth routes that should redirect authenticated users
+    const authRoutes = ['/login', '/register', '/forgot-password']
+    const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
+
+    // If user is not authenticated and trying to access protected route
+    if (!user && isProtectedRoute) {
+      console.log('Redirecting unauthenticated user from protected route:', pathname)
+      const redirectUrl = new URL('/login', request.url)
+      redirectUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    // If user is authenticated and trying to access auth routes
+    if (user && isAuthRoute) {
+      console.log('Redirecting authenticated user from auth route:', pathname)
+      const redirectUrl = new URL('/polls', request.url)
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    return supabaseResponse
+  } catch (error) {
+    console.error('Middleware error:', error)
+    // On error, allow the request to continue but log the issue
+    return supabaseResponse
   }
-
-  // If there's a user and they're trying to access auth pages, redirect to polls
-  if (user && (
-    request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/register')
-  )) {
-    const redirectUrl = new URL('/polls', request.url)
-    return NextResponse.redirect(redirectUrl)
-  }
-
-  return supabaseResponse
 }
 
 export const config = {
@@ -63,9 +78,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - api routes (API endpoints)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
 
