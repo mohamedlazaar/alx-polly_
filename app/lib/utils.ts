@@ -16,3 +16,4 @@ export function formatDate(date: Date): string {
 export function generateId(): string {
   return Math.random().toString(36).substr(2, 9)
 }
+

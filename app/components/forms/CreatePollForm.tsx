@@ -187,3 +187,4 @@ export default function CreatePollForm({ onSubmit, isLoading = false }: CreatePo
     </Card>
   )
 }
+

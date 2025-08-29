@@ -189,3 +189,4 @@ export default function PollPage({ params }: PollPageProps) {
     </div>
   )
 }
+
