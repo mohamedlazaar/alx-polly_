@@ -8,11 +8,11 @@ import { getTimeAgo } from "@/app/lib/utils"
 import PollActions from "@/app/components/PollActions"
 
 interface PollsPageProps {
-  searchParams: { 
+  searchParams: Promise<{ 
     page?: string
     search?: string
     filter?: string
-  }
+  }>
 }
 
 export default async function PollsPage({ searchParams }: PollsPageProps) {
@@ -20,10 +20,11 @@ export default async function PollsPage({ searchParams }: PollsPageProps) {
   const supabase = createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   
-  // Parse search params
-  const page = parseInt(searchParams.page || '1')
-  const search = searchParams.search || ''
-  const filter = searchParams.filter || 'all'
+  // Parse search params - await the Promise first
+  const params = await searchParams
+  const page = parseInt(params.page || '1')
+  const search = params.search || ''
+  const filter = params.filter || 'all'
   
   // Fetch polls
   const pollsResult = await DatabaseService.getPolls(user?.id, page, 12)
