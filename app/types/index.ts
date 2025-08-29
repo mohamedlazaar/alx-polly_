@@ -1,8 +1,13 @@
-export interface Poll {
+// Re-export database types for convenience
+export * from './database'
+
+// Legacy types for backward compatibility
+// These will be deprecated in favor of the database types
+export interface LegacyPoll {
   id: string
   title: string
   description?: string
-  options: PollOption[]
+  options: LegacyPollOption[]
   createdBy: string
   createdAt: Date
   expiresAt?: Date
@@ -11,13 +16,13 @@ export interface Poll {
   isPublic: boolean
 }
 
-export interface PollOption {
+export interface LegacyPollOption {
   id: string
   text: string
   votes: number
 }
 
-export interface Vote {
+export interface LegacyVote {
   id: string
   pollId: string
   optionId: string
@@ -25,11 +30,38 @@ export interface Vote {
   createdAt: Date
 }
 
-export interface CreatePollData {
+export interface LegacyCreatePollData {
   title: string
   description?: string
   options: string[]
   expiresAt?: Date
   allowMultipleVotes: boolean
   isPublic: boolean
+}
+
+// Utility types for API responses
+export interface ApiResponse<T = any> {
+  data?: T
+  error?: {
+    message: string
+    code?: string
+  }
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  count: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
+// Form validation types
+export interface FormErrors {
+  [key: string]: string
+}
+
+export interface ValidationResult {
+  isValid: boolean
+  errors: FormErrors
 }

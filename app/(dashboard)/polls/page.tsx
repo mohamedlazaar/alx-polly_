@@ -2,8 +2,59 @@ import { Button } from "@/app/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card"
 import { Input } from "@/app/components/ui/input"
 import Link from "next/link"
+import { DatabaseService } from "@/app/lib/database"
+import { createServerSupabaseClient } from "@/app/lib/supabase-server"
+import { getTimeAgo } from "@/app/lib/utils"
+import PollActions from "@/app/components/PollActions"
 
-export default function PollsPage() {
+interface PollsPageProps {
+  searchParams: { 
+    page?: string
+    search?: string
+    filter?: string
+  }
+}
+
+export default async function PollsPage({ searchParams }: PollsPageProps) {
+  // Get current user
+  const supabase = createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  // Parse search params
+  const page = parseInt(searchParams.page || '1')
+  const search = searchParams.search || ''
+  const filter = searchParams.filter || 'all'
+  
+  // Fetch polls
+  const pollsResult = await DatabaseService.getPolls(user?.id, page, 12)
+  const polls = pollsResult.data?.data || []
+  const totalPolls = pollsResult.data?.count || 0
+  const totalPages = pollsResult.data?.totalPages || 1
+
+  // Filter polls based on search and filter params
+  let filteredPolls = polls
+  
+  if (search) {
+    filteredPolls = polls.filter(poll => 
+      poll.title.toLowerCase().includes(search.toLowerCase()) ||
+      poll.description?.toLowerCase().includes(search.toLowerCase())
+    )
+  }
+
+  if (filter === 'active') {
+    filteredPolls = filteredPolls.filter(poll => {
+      const isExpired = poll.expires_at && new Date(poll.expires_at) < new Date()
+      return poll.is_active && !isExpired
+    })
+  } else if (filter === 'closed') {
+    filteredPolls = filteredPolls.filter(poll => {
+      const isExpired = poll.expires_at && new Date(poll.expires_at) < new Date()
+      return !poll.is_active || isExpired
+    })
+  } else if (filter === 'my-polls') {
+    filteredPolls = filteredPolls.filter(poll => poll.created_by === user?.id)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -28,25 +79,37 @@ export default function PollsPage() {
 
         {/* Search and Filters */}
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6 mb-8">
-          <div className="flex flex-col sm:flex-row gap-4">
+          <form className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
                 <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
                 <Input
+                  name="search"
                   placeholder="Search polls by title, description, or creator..."
+                  defaultValue={search}
                   className="pl-10 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 bg-white/50"
                 />
               </div>
             </div>
-            <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
+            <select 
+              name="filter"
+              defaultValue={filter}
+              className="h-12 px-4 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-blue-500 bg-white/50"
+            >
+              <option value="all">All Polls</option>
+              <option value="active">Active Only</option>
+              <option value="closed">Closed Only</option>
+              {user && <option value="my-polls">My Polls</option>}
+            </select>
+            <Button type="submit" className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
               </svg>
               Filter
             </Button>
-          </div>
+          </form>
         </div>
 
         {/* Stats */}
@@ -60,7 +123,7 @@ export default function PollsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Polls</p>
-                <p className="text-2xl font-bold text-gray-900">1,234</p>
+                <p className="text-2xl font-bold text-gray-900">{totalPolls}</p>
               </div>
             </div>
           </div>
@@ -74,7 +137,12 @@ export default function PollsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Active Polls</p>
-                <p className="text-2xl font-bold text-gray-900">856</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {polls.filter(poll => {
+                    const isExpired = poll.expires_at && new Date(poll.expires_at) < new Date()
+                    return poll.is_active && !isExpired
+                  }).length}
+                </p>
               </div>
             </div>
           </div>
@@ -88,7 +156,7 @@ export default function PollsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Votes</p>
-                <p className="text-2xl font-bold text-gray-900">45.2K</p>
+                <p className="text-2xl font-bold text-gray-900">0</p>
               </div>
             </div>
           </div>
@@ -102,247 +170,131 @@ export default function PollsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Today's Votes</p>
-                <p className="text-2xl font-bold text-gray-900">1,847</p>
+                <p className="text-2xl font-bold text-gray-900">0</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Polls Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Sample Poll Cards */}
-          <Card className="group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 bg-white/80 backdrop-blur-sm border-white/20">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                  Active
-                </span>
-                <span className="text-xs text-gray-500">2 days ago</span>
-              </div>
-              <CardTitle className="text-lg font-semibold group-hover:text-blue-600 transition-colors">
-                Favorite Programming Language
-              </CardTitle>
-              <CardDescription className="text-gray-600">
-                What's your preferred programming language for web development?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Votes</span>
-                  <span className="font-semibold text-gray-900">156</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Created by</span>
-                  <span className="font-medium text-gray-900">John Doe</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full" style={{ width: '75%' }}></div>
-                </div>
-              </div>
-              <Link href="/polls/1" className="block mt-4">
-                <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
-                  Vote Now
+        {filteredPolls.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-medium text-gray-900 mb-2">No polls found</h3>
+            <p className="text-gray-600 mb-6">
+              {search || filter !== 'all' 
+                ? 'Try adjusting your search or filter criteria'
+                : 'Be the first to create a poll!'
+              }
+            </p>
+            {!search && filter === 'all' && (
+              <Link href="/polls/create">
+                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                  Create Your First Poll
                 </Button>
               </Link>
-            </CardContent>
-          </Card>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPolls.map((poll) => {
+              const isExpired = poll.expires_at && new Date(poll.expires_at) < new Date()
+              const isActive = poll.is_active && !isExpired
+              const timeAgo = getTimeAgo(new Date(poll.created_at))
+              const isOwner = user?.id === poll.created_by
+              
+              return (
+                <Card key={poll.id} className="group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 bg-white/80 backdrop-blur-sm border-white/20">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                        isActive 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {isActive ? 'Active' : 'Closed'}
+                      </span>
+                      <span className="text-xs text-gray-500">{timeAgo}</span>
+                    </div>
+                    <CardTitle className="text-lg font-semibold group-hover:text-blue-600 transition-colors">
+                      {poll.title}
+                    </CardTitle>
+                    <CardDescription className="text-gray-600">
+                      {poll.description || 'No description provided'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Created by</span>
+                        <span className="font-medium text-gray-900">
+                          {isOwner ? 'You' : poll.created_by}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Multiple votes</span>
+                        <span className="font-medium text-gray-900">
+                          {poll.allow_multiple_votes ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      {poll.expires_at && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Expires</span>
+                          <span className="font-medium text-gray-900">
+                            {new Date(poll.expires_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between mt-4">
+                      <Link href={`/polls/${poll.id}`} className="flex-1">
+                        <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
+                          {isActive ? 'Vote Now' : 'View Results'}
+                        </Button>
+                      </Link>
+                      {isOwner && (
+                        <div className="ml-2">
+                          <PollActions poll={poll} />
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
 
-          <Card className="group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 bg-white/80 backdrop-blur-sm border-white/20">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
-                  Closed
-                </span>
-                <span className="text-xs text-gray-500">1 week ago</span>
-              </div>
-              <CardTitle className="text-lg font-semibold group-hover:text-blue-600 transition-colors">
-                Best Pizza Topping
-              </CardTitle>
-              <CardDescription className="text-gray-600">
-                Vote for your favorite pizza topping!
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Votes</span>
-                  <span className="font-semibold text-gray-900">89</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Created by</span>
-                  <span className="font-medium text-gray-900">Jane Smith</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full" style={{ width: '100%' }}></div>
-                </div>
-              </div>
-              <Link href="/polls/2" className="block mt-4">
-                <Button variant="outline" className="w-full border-gray-300 hover:bg-gray-50">
-                  View Results
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 bg-white/80 backdrop-blur-sm border-white/20">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                  Active
-                </span>
-                <span className="text-xs text-gray-500">3 days ago</span>
-              </div>
-              <CardTitle className="text-lg font-semibold group-hover:text-blue-600 transition-colors">
-                Preferred Work Environment
-              </CardTitle>
-              <CardDescription className="text-gray-600">
-                Where do you prefer to work from?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Votes</span>
-                  <span className="font-semibold text-gray-900">234</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Created by</span>
-                  <span className="font-medium text-gray-900">Mike Johnson</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full" style={{ width: '60%' }}></div>
-                </div>
-              </div>
-              <Link href="/polls/3" className="block mt-4">
-                <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
-                  Vote Now
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 bg-white/80 backdrop-blur-sm border-white/20">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                  Active
-                </span>
-                <span className="text-xs text-gray-500">5 days ago</span>
-              </div>
-              <CardTitle className="text-lg font-semibold group-hover:text-blue-600 transition-colors">
-                Favorite Movie Genre
-              </CardTitle>
-              <CardDescription className="text-gray-600">
-                What's your go-to movie genre for entertainment?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Votes</span>
-                  <span className="font-semibold text-gray-900">67</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Created by</span>
-                  <span className="font-medium text-gray-900">Sarah Wilson</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-yellow-500 to-orange-500 h-2 rounded-full" style={{ width: '45%' }}></div>
-                </div>
-              </div>
-              <Link href="/polls/4" className="block mt-4">
-                <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
-                  Vote Now
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 bg-white/80 backdrop-blur-sm border-white/20">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                  Active
-                </span>
-                <span className="text-xs text-gray-500">1 day ago</span>
-              </div>
-              <CardTitle className="text-lg font-semibold group-hover:text-blue-600 transition-colors">
-                Best Coffee Type
-              </CardTitle>
-              <CardDescription className="text-gray-600">
-                Which coffee type do you prefer for your daily caffeine fix?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Votes</span>
-                  <span className="font-semibold text-gray-900">123</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Created by</span>
-                  <span className="font-medium text-gray-900">Alex Brown</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-amber-500 to-yellow-500 h-2 rounded-full" style={{ width: '80%' }}></div>
-                </div>
-              </div>
-              <Link href="/polls/5" className="block mt-4">
-                <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
-                  Vote Now
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 bg-white/80 backdrop-blur-sm border-white/20">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                  Active
-                </span>
-                <span className="text-xs text-gray-500">4 days ago</span>
-              </div>
-              <CardTitle className="text-lg font-semibold group-hover:text-blue-600 transition-colors">
-                Preferred Music Genre
-              </CardTitle>
-              <CardDescription className="text-gray-600">
-                What music genre do you listen to most often?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Votes</span>
-                  <span className="font-semibold text-gray-900">178</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Created by</span>
-                  <span className="font-medium text-gray-900">Lisa Davis</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-pink-500 to-rose-500 h-2 rounded-full" style={{ width: '70%' }}></div>
-                </div>
-              </div>
-              <Link href="/polls/6" className="block mt-4">
-                <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
-                  Vote Now
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Load More */}
-        <div className="text-center mt-12">
-          <Button variant="outline" size="lg" className="h-14 px-8 text-lg border-gray-300 hover:bg-gray-50">
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            Load More Polls
-          </Button>
-        </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center mt-12">
+            <div className="flex items-center gap-2">
+              {page > 1 && (
+                <Link href={`/polls?page=${page - 1}${search ? `&search=${search}` : ''}${filter !== 'all' ? `&filter=${filter}` : ''}`}>
+                  <Button variant="outline" className="border-gray-300 hover:bg-gray-50">
+                    Previous
+                  </Button>
+                </Link>
+              )}
+              
+              <span className="px-4 py-2 text-gray-600">
+                Page {page} of {totalPages}
+              </span>
+              
+              {page < totalPages && (
+                <Link href={`/polls?page=${page + 1}${search ? `&search=${search}` : ''}${filter !== 'all' ? `&filter=${filter}` : ''}`}>
+                  <Button variant="outline" className="border-gray-300 hover:bg-gray-50">
+                    Next
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

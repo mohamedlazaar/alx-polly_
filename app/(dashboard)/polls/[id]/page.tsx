@@ -1,8 +1,39 @@
 import { Button } from "@/app/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card"
 import Link from "next/link"
+import { DatabaseService } from "@/app/lib/database"
+import { notFound } from "next/navigation"
+import PollVotingForm from "@/app/components/PollVotingForm"
 
-export default function PollPage({ params }: { params: { id: string } }) {
+interface PollPageProps {
+  params: { id: string }
+}
+
+export default async function PollPage({ params }: PollPageProps) {
+  // Fetch poll data from database
+  const pollResult = await DatabaseService.getPoll(params.id)
+  
+  if (pollResult.error || !pollResult.data) {
+    notFound()
+  }
+
+  const poll = pollResult.data
+  const totalVotes = poll.options.reduce((sum, option) => sum + option.vote_count, 0)
+  
+  // Calculate percentages for each option
+  const optionsWithPercentages = poll.options.map(option => ({
+    ...option,
+    percentage: totalVotes > 0 ? Math.round((option.vote_count / totalVotes) * 100) : 0
+  }))
+
+  // Format creation date
+  const createdDate = new Date(poll.created_at)
+  const timeAgo = getTimeAgo(createdDate)
+  
+  // Determine poll status
+  const isExpired = poll.expires_at && new Date(poll.expires_at) < new Date()
+  const isActive = poll.is_active && !isExpired
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-100">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -26,11 +57,13 @@ export default function PollPage({ params }: { params: { id: string } }) {
             </svg>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Favorite Programming Language
+            {poll.title}
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-6">
-            What's your preferred programming language for web development? Share your thoughts and see how the community votes!
-          </p>
+          {poll.description && (
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-6">
+              {poll.description}
+            </p>
+          )}
           
           {/* Poll Stats */}
           <div className="flex flex-wrap justify-center gap-6 text-sm text-gray-500">
@@ -38,147 +71,37 @@ export default function PollPage({ params }: { params: { id: string } }) {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <span>156 votes</span>
+              <span>{totalVotes} votes</span>
             </div>
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>Created 2 days ago</span>
+              <span>Created {timeAgo}</span>
             </div>
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              <span>by John Doe</span>
+              <span>by {poll.created_by}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                Active
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                isActive 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {isActive ? 'Active' : 'Closed'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Poll Options */}
-        <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm mb-8">
-          <CardHeader className="text-center pb-6">
-            <CardTitle className="text-2xl font-bold text-gray-900">Cast Your Vote</CardTitle>
-            <CardDescription className="text-lg text-gray-600">
-              Select your preferred programming language
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Option 1 */}
-            <div className="group cursor-pointer">
-              <div className="relative p-6 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-all duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-6 h-6 border-2 border-gray-300 rounded-full group-hover:border-purple-500 transition-colors">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full m-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">JavaScript</h3>
-                      <p className="text-gray-600">The language of the web</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900">45%</div>
-                    <div className="text-sm text-gray-500">70 votes</div>
-                  </div>
-                </div>
-                <div className="mt-4 w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full" style={{ width: '45%' }}></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Option 2 */}
-            <div className="group cursor-pointer">
-              <div className="relative p-6 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-all duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-6 h-6 border-2 border-gray-300 rounded-full group-hover:border-purple-500 transition-colors">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full m-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Python</h3>
-                      <p className="text-gray-600">Simple and powerful</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900">32%</div>
-                    <div className="text-sm text-gray-500">50 votes</div>
-                  </div>
-                </div>
-                <div className="mt-4 w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-3 rounded-full" style={{ width: '32%' }}></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Option 3 */}
-            <div className="group cursor-pointer">
-              <div className="relative p-6 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-all duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-6 h-6 border-2 border-gray-300 rounded-full group-hover:border-purple-500 transition-colors">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full m-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">TypeScript</h3>
-                      <p className="text-gray-600">JavaScript with superpowers</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900">18%</div>
-                    <div className="text-sm text-gray-500">28 votes</div>
-                  </div>
-                </div>
-                <div className="mt-4 w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-gradient-to-r from-indigo-500 to-purple-500 h-3 rounded-full" style={{ width: '18%' }}></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Option 4 */}
-            <div className="group cursor-pointer">
-              <div className="relative p-6 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition-all duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-6 h-6 border-2 border-gray-300 rounded-full group-hover:border-purple-500 transition-colors">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full m-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Rust</h3>
-                      <p className="text-gray-600">Memory safety without garbage collection</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900">5%</div>
-                    <div className="text-sm text-gray-500">8 votes</div>
-                  </div>
-                </div>
-                <div className="mt-4 w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-gradient-to-r from-orange-500 to-red-500 h-3 rounded-full" style={{ width: '5%' }}></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Vote Button */}
-            <div className="pt-6">
-              <Button className="w-full h-14 text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Submit Vote
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Poll Voting Form */}
+        <PollVotingForm poll={poll} />
 
         {/* Poll Details */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
           {/* Poll Information */}
           <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
             <CardHeader>
@@ -192,87 +115,71 @@ export default function PollPage({ params }: { params: { id: string } }) {
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <span className="text-gray-600">Status</span>
-                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                  Active
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  isActive 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {isActive ? 'Active' : 'Closed'}
                 </span>
               </div>
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <span className="text-gray-600">Total Votes</span>
-                <span className="font-semibold text-gray-900">156</span>
+                <span className="font-semibold text-gray-900">{totalVotes}</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <span className="text-gray-600">Created</span>
-                <span className="font-semibold text-gray-900">2 days ago</span>
+                <span className="font-semibold text-gray-900">{timeAgo}</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <span className="text-gray-600">Creator</span>
-                <span className="font-semibold text-gray-900">John Doe</span>
+                <span className="font-semibold text-gray-900">{poll.created_by}</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <span className="text-gray-600">Multiple Votes</span>
-                <span className="font-semibold text-gray-900">No</span>
+                <span className="font-semibold text-gray-900">
+                  {poll.allow_multiple_votes ? 'Yes' : 'No'}
+                </span>
               </div>
+              {poll.expires_at && (
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-600">Expires</span>
+                  <span className="font-semibold text-gray-900">
+                    {new Date(poll.expires_at).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Recent Activity */}
+          {/* Poll Results */}
           <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-xl font-bold text-gray-900 flex items-center">
                 <svg className="w-5 h-5 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                Recent Activity
+                Poll Results
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+              {optionsWithPercentages.map((option, index) => (
+                <div key={option.id} className="p-4 border border-gray-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900">{option.text}</h3>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-gray-900">{option.percentage}%</div>
+                      <div className="text-sm text-gray-500">{option.vote_count} votes</div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div 
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full transition-all duration-500" 
+                      style={{ width: `${option.percentage}%` }}
+                    ></div>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">Sarah voted for JavaScript</p>
-                  <p className="text-xs text-gray-500">2 minutes ago</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">Mike voted for Python</p>
-                  <p className="text-xs text-gray-500">5 minutes ago</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">Alex voted for TypeScript</p>
-                  <p className="text-xs text-gray-500">12 minutes ago</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                  <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">Lisa voted for Rust</p>
-                  <p className="text-xs text-gray-500">18 minutes ago</p>
-                </div>
-              </div>
+              ))}
             </CardContent>
           </Card>
         </div>
@@ -305,7 +212,13 @@ export default function PollPage({ params }: { params: { id: string } }) {
                 </svg>
                 WhatsApp
               </Button>
-              <Button variant="outline" className="flex items-center gap-2 border-gray-600 text-gray-600 hover:bg-gray-50">
+              <Button 
+                variant="outline" 
+                className="flex items-center gap-2 border-gray-600 text-gray-600 hover:bg-gray-50"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href)
+                }}
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                 </svg>
@@ -317,5 +230,18 @@ export default function PollPage({ params }: { params: { id: string } }) {
       </div>
     </div>
   )
+}
+
+// Helper function to format time ago
+function getTimeAgo(date: Date): string {
+  const now = new Date()
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+  
+  if (diffInSeconds < 60) return 'just now'
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`
+  if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`
+  if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)} months ago`
+  return `${Math.floor(diffInSeconds / 31536000)} years ago`
 }
 

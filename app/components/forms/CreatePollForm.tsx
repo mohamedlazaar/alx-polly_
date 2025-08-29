@@ -1,9 +1,14 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/app/components/ui/button"
 import { Input } from "@/app/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card"
+import { useAuth } from "@/app/contexts/AuthContext"
+import { DatabaseService } from "@/app/lib/database"
+import { validatePollData } from "@/app/lib/database"
+import type { CreatePollData } from "@/app/types"
 
 interface PollOption {
   id: string
@@ -11,6 +16,8 @@ interface PollOption {
 }
 
 export default function CreatePollForm() {
+  const router = useRouter()
+  const { user } = useAuth()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [options, setOptions] = useState<PollOption[]>([
@@ -23,6 +30,8 @@ export default function CreatePollForm() {
   const [isPublic, setIsPublic] = useState(true)
   const [expiresAt, setExpiresAt] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState(false)
 
   const addOption = () => {
     const newId = (options.length + 1).toString()
@@ -43,21 +52,73 @@ export default function CreatePollForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
+    setSuccess(false)
+    
+    if (!user) {
+      setError("You must be logged in to create a poll")
+      return
+    }
+
+    // Filter out empty options
+    const validOptions = options.filter(option => option.text.trim())
+    
+    // Validate form data
+    const pollData: CreatePollData = {
+      title: title.trim(),
+      description: description.trim() || undefined,
+      options: validOptions.map(option => option.text.trim()),
+      allow_multiple_votes: allowMultipleVotes,
+      is_public: isPublic,
+      expires_at: expiresAt || undefined
+    }
+
+    const validation = validatePollData(pollData)
+    if (!validation.isValid) {
+      setError(validation.errors.join(", "))
+      return
+    }
+
     setIsSubmitting(true)
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    setIsSubmitting(false)
-    // Handle form submission
-    console.log({
-      title,
-      description,
-      options: options.filter(option => option.text.trim()),
-      allowMultipleVotes,
-      isPublic,
-      expiresAt
-    })
+    try {
+      const result = await DatabaseService.createPoll(pollData, user.id)
+      
+      if (result.error) {
+        setError(result.error.message)
+      } else {
+        setSuccess(true)
+        // Redirect to the new poll after a short delay
+        setTimeout(() => {
+          router.push(`/polls/${result.data?.id}`)
+        }, 1500)
+      }
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.")
+      console.error("Error creating poll:", err)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Show success message
+  if (success) {
+    return (
+      <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+        <CardContent className="text-center py-12">
+          <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Poll Created Successfully!</h2>
+          <p className="text-lg text-gray-600 mb-6">
+            Your poll has been created and is now live. Redirecting you to the poll page...
+          </p>
+          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -69,6 +130,18 @@ export default function CreatePollForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-red-700 font-medium">{error}</span>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Poll Title */}
           <div className="space-y-3">
@@ -85,6 +158,7 @@ export default function CreatePollForm() {
               placeholder="What's your burning question?"
               className="h-14 px-4 text-lg border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
               required
+              disabled={isSubmitting}
             />
           </div>
 
@@ -102,6 +176,7 @@ export default function CreatePollForm() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add more context about your poll to help people understand what you're asking..."
               className="flex min-h-[120px] w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-lg ring-offset-background placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -122,6 +197,7 @@ export default function CreatePollForm() {
                     placeholder={`Option ${index + 1}`}
                     className="h-12 px-4 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
                     required
+                    disabled={isSubmitting}
                   />
                   {options.length > 2 && (
                     <Button 
@@ -130,6 +206,7 @@ export default function CreatePollForm() {
                       size="sm" 
                       onClick={() => removeOption(option.id)}
                       className="h-12 px-4 border-red-300 text-red-600 hover:bg-red-50"
+                      disabled={isSubmitting}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -145,6 +222,7 @@ export default function CreatePollForm() {
               size="sm" 
               onClick={addOption}
               className="h-12 px-6 border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+              disabled={isSubmitting}
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -174,6 +252,7 @@ export default function CreatePollForm() {
                   checked={allowMultipleVotes}
                   onChange={(e) => setAllowMultipleVotes(e.target.checked)}
                   className="h-6 w-6 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  disabled={isSubmitting}
                 />
               </div>
               
@@ -187,6 +266,7 @@ export default function CreatePollForm() {
                   checked={isPublic}
                   onChange={(e) => setIsPublic(e.target.checked)}
                   className="h-6 w-6 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -206,6 +286,7 @@ export default function CreatePollForm() {
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
               className="h-12 px-4 border-gray-300 focus:border-emerald-500 focus:ring-emerald-500"
+              disabled={isSubmitting}
             />
             <p className="text-sm text-gray-500">
               Leave empty to keep the poll active indefinitely
@@ -218,7 +299,8 @@ export default function CreatePollForm() {
               type="button" 
               variant="outline" 
               className="flex-1 h-14 text-lg border-gray-300 hover:bg-gray-50"
-              onClick={() => window.history.back()}
+              onClick={() => router.back()}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
