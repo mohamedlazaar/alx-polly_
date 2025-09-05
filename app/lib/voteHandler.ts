@@ -28,11 +28,14 @@ export const handleSubmitVote = async (
   setIsSubmitting: (loading: boolean) => void,
   router: { refresh: () => void }
 ): Promise<void> => {
-  // Clear previous states
+  // Clear previous states to ensure clean UI
   setError("")
   setSuccess(false)
 
-  // Validation helpers
+  /**
+   * Validation helper functions
+   * These ensure data integrity before attempting to submit votes
+   */
   const validateSelection = (): boolean => {
     if (selectedOptions.length === 0) {
       setError("Please select at least one option")
@@ -42,6 +45,7 @@ export const handleSubmitVote = async (
   }
 
   const validateAnonymousVoting = (): boolean => {
+    // For anonymous voting, we need both name and email for identification
     if (!user && (!voterEmail || !voterName)) {
       setError("Please provide your name and email for anonymous voting")
       return false
@@ -49,7 +53,7 @@ export const handleSubmitVote = async (
     return true
   }
 
-  // Early validation returns
+  // Perform all validations before proceeding
   if (!validateSelection() || !validateAnonymousVoting()) {
     return
   }
@@ -57,23 +61,31 @@ export const handleSubmitVote = async (
   setIsSubmitting(true)
 
   try {
-    // Create vote data for all options at once
+    /**
+     * Create vote data array for all selected options
+     * This allows us to submit multiple votes in parallel for better performance
+     */
     const voteDataArray: VoteData[] = selectedOptions.map(optionId => ({
       poll_id: pollId,
       option_id: optionId,
+      // Use user ID for authenticated users, undefined for anonymous
       user_id: user?.id || undefined,
+      // Use voter info for anonymous users, undefined for authenticated
       voter_email: user ? undefined : voterEmail,
       voter_name: user ? undefined : voterName
     }))
 
-    // Submit all votes in parallel for better performance
+    /**
+     * Submit all votes in parallel using Promise.all
+     * This is more efficient than sequential voting and provides better UX
+     */
     const votePromises = voteDataArray.map(voteData => 
       DatabaseService.submitVote(voteData)
     )
 
     const results = await Promise.all(votePromises)
 
-    // Check for any errors in the results
+    // Check if any vote submission failed
     const errorResult = results.find(result => result.error)
     if (errorResult?.error) {
       throw new Error(errorResult.error.message)
@@ -81,7 +93,10 @@ export const handleSubmitVote = async (
 
     setSuccess(true)
     
-    // Use requestAnimationFrame for better UX timing
+    /**
+     * Use requestAnimationFrame for optimal timing
+     * This ensures the success animation plays before page refresh
+     */
     requestAnimationFrame(() => {
       setTimeout(() => {
         router.refresh()
@@ -97,6 +112,10 @@ export const handleSubmitVote = async (
 
 /**
  * Validate if a poll is active and can accept votes
+ * 
+ * Checks both the poll's active status and expiration date to determine
+ * if the poll is currently accepting votes.
+ * 
  * @param poll - Poll object with expiration and active status
  * @returns Object with isActive and isExpired boolean flags
  */
@@ -104,7 +123,9 @@ export const validatePollStatus = (poll: {
   expires_at?: string | null
   is_active: boolean
 }): { isActive: boolean; isExpired: boolean } => {
-  const isExpired = poll.expires_at && new Date(poll.expires_at) < new Date()
+  // Check if poll has expired based on expiration date
+  const isExpired = Boolean(poll.expires_at && new Date(poll.expires_at) < new Date())
+  // Poll is active if it's marked as active AND not expired
   const isActive = poll.is_active && !isExpired
   
   return { isActive, isExpired }
@@ -112,12 +133,19 @@ export const validatePollStatus = (poll: {
 
 /**
  * Calculate total votes and percentages for poll options
+ * 
+ * Processes poll options to calculate vote statistics including:
+ * - Total vote count across all options
+ * - Percentage distribution for each option
+ * 
  * @param options - Array of poll options with vote counts and other properties
  * @returns Object with total votes and options with calculated percentages
  */
 export const calculateVoteStats = <T extends { id: string; vote_count: number }>(options: T[]) => {
+  // Sum up all votes across all options
   const totalVotes = options.reduce((sum, option) => sum + option.vote_count, 0)
   
+  // Calculate percentage for each option, handling division by zero
   const optionsWithPercentages = options.map(option => ({
     ...option,
     percentage: totalVotes > 0 ? Math.round((option.vote_count / totalVotes) * 100) : 0
@@ -131,6 +159,10 @@ export const calculateVoteStats = <T extends { id: string; vote_count: number }>
 
 /**
  * Check if user has already voted on specific options
+ * 
+ * Filters out options that the user has already voted on to prevent
+ * duplicate voting when multiple votes are allowed.
+ * 
  * @param selectedOptions - Array of selected option IDs
  * @param existingVotes - Array of existing votes for the user
  * @returns Array of options that haven't been voted on yet
@@ -139,6 +171,8 @@ export const filterUnvotedOptions = (
   selectedOptions: string[],
   existingVotes: Array<{ option_id: string }>
 ): string[] => {
+  // Create a Set of already voted option IDs for efficient lookup
   const votedOptionIds = new Set(existingVotes.map(vote => vote.option_id))
+  // Return only options that haven't been voted on yet
   return selectedOptions.filter(optionId => !votedOptionIds.has(optionId))
 }

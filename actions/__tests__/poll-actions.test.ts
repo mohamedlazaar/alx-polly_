@@ -1,5 +1,8 @@
-import { createPoll, votePoll, deletePoll } from '../poll-actions';
-import { Poll, PollOption } from '../../types';
+import { DatabaseService } from "@/app/lib/database";
+import type { Poll } from "@/app/types";
+
+import { createPoll, votePoll, deletePoll } from '../../app/components/PollActions';
+import { Poll, PollOption } from '../../app/types';
 
 describe('Poll Actions', () => {
   describe('createPoll', () => {

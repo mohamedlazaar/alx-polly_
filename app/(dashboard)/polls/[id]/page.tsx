@@ -6,12 +6,15 @@ import { notFound } from "next/navigation"
 import PollVotingForm from "@/app/components/PollVotingForm"
 
 interface PollPageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function PollPage({ params }: PollPageProps) {
+  // Await params as required by Next.js 15
+  const { id } = await params
+  
   // Fetch poll data from database
-  const pollResult = await DatabaseService.getPoll(params.id)
+  const pollResult = await DatabaseService.getPoll(id)
   
   if (pollResult.error || !pollResult.data) {
     notFound()

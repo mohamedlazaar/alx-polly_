@@ -10,14 +10,32 @@ import { DatabaseService } from "@/app/lib/database"
 import { validatePollData } from "@/app/lib/database"
 import type { CreatePollData } from "@/app/types"
 
+/**
+ * Interface for poll options in the form state
+ * Used for managing dynamic option creation and editing
+ */
 interface PollOption {
   id: string
   text: string
 }
 
+/**
+ * CreatePollForm Component
+ * 
+ * A comprehensive form for creating new polls with the following features:
+ * - Dynamic option management (add/remove options)
+ * - Poll settings configuration (multiple votes, public/private)
+ * - Expiration date setting
+ * - Real-time validation
+ * - Success/error state handling
+ * 
+ * @returns JSX element containing the poll creation form
+ */
 export default function CreatePollForm() {
   const router = useRouter()
   const { user } = useAuth()
+  
+  // Form state management
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [options, setOptions] = useState<PollOption[]>([
@@ -33,37 +51,57 @@ export default function CreatePollForm() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
 
+  /**
+   * Add a new poll option to the form
+   * Generates a unique ID based on current option count
+   */
   const addOption = () => {
     const newId = (options.length + 1).toString()
     setOptions([...options, { id: newId, text: "" }])
   }
 
+  /**
+   * Remove a poll option from the form
+   * Prevents removal if only 2 options remain (minimum required)
+   * @param id - ID of the option to remove
+   */
   const removeOption = (id: string) => {
     if (options.length > 2) {
       setOptions(options.filter(option => option.id !== id))
     }
   }
 
+  /**
+   * Update the text content of a specific poll option
+   * @param id - ID of the option to update
+   * @param text - New text content for the option
+   */
   const updateOption = (id: string, text: string) => {
     setOptions(options.map(option => 
       option.id === id ? { ...option, text } : option
     ))
   }
 
+  /**
+   * Handle form submission for poll creation
+   * Performs validation, data transformation, and submission
+   * @param e - Form submit event
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setSuccess(false)
     
+    // Ensure user is authenticated
     if (!user) {
       setError("You must be logged in to create a poll")
       return
     }
 
-    // Filter out empty options
+    // Filter out empty options to prevent submission of incomplete data
     const validOptions = options.filter(option => option.text.trim())
     
-    // Validate form data
+    // Transform form data to match API expectations
     const pollData: CreatePollData = {
       title: title.trim(),
       description: description.trim() || undefined,
@@ -73,6 +111,7 @@ export default function CreatePollForm() {
       expires_at: expiresAt || undefined
     }
 
+    // Validate poll data before submission
     const validation = validatePollData(pollData)
     if (!validation.isValid) {
       setError(validation.errors.join(", "))
@@ -82,13 +121,14 @@ export default function CreatePollForm() {
     setIsSubmitting(true)
     
     try {
+      // Submit poll to database
       const result = await DatabaseService.createPoll(pollData, user.id)
       
       if (result.error) {
         setError(result.error.message)
       } else {
         setSuccess(true)
-        // Redirect to the new poll after a short delay
+        // Redirect to the new poll after showing success message
         setTimeout(() => {
           router.push(`/polls/${result.data?.id}`)
         }, 1500)

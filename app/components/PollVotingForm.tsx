@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/app/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card"
 import { useAuth } from "@/app/contexts/AuthContext"
-import { DatabaseService } from "@/app/lib/database"
+import { handleSubmitVote as submitVote, validatePollStatus, calculateVoteStats } from "@/app/lib/voteHandler"
 import type { PollWithOptions } from "@/app/types"
 
 interface PollVotingFormProps {
@@ -15,6 +15,8 @@ interface PollVotingFormProps {
 export default function PollVotingForm({ poll }: PollVotingFormProps) {
   const router = useRouter()
   const { user } = useAuth()
+  
+  // State management for voting form
   const [selectedOptions, setSelectedOptions] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
@@ -22,74 +24,47 @@ export default function PollVotingForm({ poll }: PollVotingFormProps) {
   const [voterEmail, setVoterEmail] = useState("")
   const [voterName, setVoterName] = useState("")
 
-  // Check if poll is active
-  const isExpired = poll.expires_at && new Date(poll.expires_at) < new Date()
-  const isActive = poll.is_active && !isExpired
+  // Determine poll status and calculate vote statistics
+  const { isActive, isExpired } = validatePollStatus(poll)
+  const { totalVotes, optionsWithPercentages } = calculateVoteStats(poll.options)
 
-  // Calculate total votes
-  const totalVotes = poll.options.reduce((sum, option) => sum + option.vote_count, 0)
-
+  /**
+   * Handle option selection based on poll settings
+   * Supports both single and multiple vote scenarios
+   */
   const handleOptionSelect = (optionId: string) => {
+    // Don't allow selection if poll is not active
     if (!isActive) return
 
     if (poll.allow_multiple_votes) {
+      // Multiple votes allowed: toggle selection
       setSelectedOptions(prev => 
         prev.includes(optionId) 
-          ? prev.filter(id => id !== optionId)
-          : [...prev, optionId]
+          ? prev.filter(id => id !== optionId)  // Remove if already selected
+          : [...prev, optionId]                 // Add if not selected
       )
     } else {
+      // Single vote only: replace selection
       setSelectedOptions([optionId])
     }
   }
 
+  /**
+   * Handle vote submission using the optimized vote handler
+   * Delegates to the centralized vote submission logic
+   */
   const handleSubmitVote = async () => {
-    if (!isActive) return
-
-    setError("")
-    setSuccess(false)
-
-    // Validate selection
-    if (selectedOptions.length === 0) {
-      setError("Please select at least one option")
-      return
-    }
-
-    // Validate anonymous voting
-    if (!user && (!voterEmail || !voterName)) {
-      setError("Please provide your name and email for anonymous voting")
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      // Submit votes for each selected option
-      for (const optionId of selectedOptions) {
-        const voteData = {
-          poll_id: poll.id,
-          option_id: optionId,
-          user_id: user?.id || undefined,
-          voter_email: user ? undefined : voterEmail,
-          voter_name: user ? undefined : voterName
-        }
-
-        const result = await DatabaseService.submitVote(voteData)
-        if (result.error) {
-          throw new Error(result.error.message)
-        }
-      }
-
-      setSuccess(true)
-      // Refresh the page to show updated results
-      setTimeout(() => {
-        router.refresh()
-      }, 1500)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit vote")
-    } finally {
-      setIsSubmitting(false)
-    }
+    await submitVote(
+      selectedOptions,
+      poll.id,
+      user,
+      voterEmail,
+      voterName,
+      setError,
+      setSuccess,
+      setIsSubmitting,
+      router
+    )
   }
 
   // Show success message
@@ -163,9 +138,11 @@ export default function PollVotingForm({ poll }: PollVotingFormProps) {
 
         {/* Poll Options */}
         <div className="space-y-4">
-          {poll.options.map((option, index) => {
-            const percentage = totalVotes > 0 ? Math.round((option.vote_count / totalVotes) * 100) : 0
+          {optionsWithPercentages.map((option, index) => {
+            const percentage = option.percentage
             const isSelected = selectedOptions.includes(option.id)
+            
+            // Define gradient colors for visual variety in progress bars
             const gradientColors = [
               'from-purple-500 to-pink-500',
               'from-blue-500 to-cyan-500',
@@ -188,6 +165,7 @@ export default function PollVotingForm({ poll }: PollVotingFormProps) {
                 } ${!isActive ? 'opacity-75' : ''}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
+                      {/* Selection indicator - only show for active polls */}
                       {isActive && (
                         <div className={`w-6 h-6 border-2 rounded-full transition-colors ${
                           isSelected 
@@ -204,11 +182,13 @@ export default function PollVotingForm({ poll }: PollVotingFormProps) {
                         <p className="text-gray-600">Option {index + 1}</p>
                       </div>
                     </div>
+                    {/* Vote statistics display */}
                     <div className="text-right">
                       <div className="text-2xl font-bold text-gray-900">{percentage}%</div>
                       <div className="text-sm text-gray-500">{option.vote_count} votes</div>
                     </div>
                   </div>
+                  {/* Progress bar with dynamic gradient */}
                   <div className="mt-4 w-full bg-gray-200 rounded-full h-3">
                     <div 
                       className={`bg-gradient-to-r ${gradientColors[index % gradientColors.length]} h-3 rounded-full transition-all duration-500`}
