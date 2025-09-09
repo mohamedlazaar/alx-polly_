@@ -11,11 +11,58 @@ interface PollActionsProps {
   poll: Poll
 }
 
+function DeleteConfirmation({
+  isDeleting,
+  onCancel,
+  onDelete,
+}: {
+  isDeleting: boolean
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 shadow-sm">
+      <div className="flex items-center text-red-700 text-sm font-medium">
+        <svg className="w-4 h-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+        Are you sure?
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onCancel}
+          className="border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 px-3 py-1 h-7 text-xs"
+        >
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={onDelete}
+          disabled={isDeleting}
+          className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-md hover:shadow-lg transition-all duration-200 px-3 py-1 h-7 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isDeleting ? (
+            <div className="flex items-center">
+              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
+              Deleting...
+            </div>
+          ) : (
+            'Delete'
+          )}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export default function PollActions({ poll }: PollActionsProps) {
   const router = useRouter()
   const { user } = useAuth()
   const [isDeleting, setIsDeleting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Only show actions if user is the creator
   if (!user || user.id !== poll.created_by) {
@@ -23,7 +70,9 @@ export default function PollActions({ poll }: PollActionsProps) {
   }
 
   const handleEdit = () => {
-    router.push(`/polls/${poll.id}/edit`)
+    if (!isDeleting) {
+      router.push(`/polls/${poll.id}/edit`)
+    }
   }
 
   const handleDelete = async () => {
@@ -33,17 +82,17 @@ export default function PollActions({ poll }: PollActionsProps) {
     }
 
     setIsDeleting(true)
+    setError(null)
     try {
       const result = await DatabaseService.deletePoll(poll.id, user.id)
       if (result.error) {
-        alert(`Error deleting poll: ${result.error.message}`)
+        setError(result.error.message)
       } else {
-        // Refresh the page to update the list
         router.refresh()
       }
-    } catch (error) {
-      console.error('Error deleting poll:', error)
-      alert('An unexpected error occurred while deleting the poll.')
+    } catch (err) {
+      setError('An unexpected error occurred while deleting the poll.')
+      console.error('Error deleting poll:', err)
     } finally {
       setIsDeleting(false)
       setShowConfirm(false)
@@ -52,15 +101,16 @@ export default function PollActions({ poll }: PollActionsProps) {
 
   const handleCancelDelete = () => {
     setShowConfirm(false)
+    setError(null)
   }
 
   return (
     <div className="flex items-center gap-3">
-      {/* Edit Button */}
       <Button
         variant="outline"
         size="sm"
         onClick={handleEdit}
+        disabled={isDeleting}
         className="group border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md transition-all duration-200 px-4 py-2 h-9"
       >
         <svg className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,42 +118,12 @@ export default function PollActions({ poll }: PollActionsProps) {
         </svg>
         Edit
       </Button>
-      
-      {/* Delete Button or Confirmation */}
       {showConfirm ? (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 shadow-sm">
-          <div className="flex items-center text-red-700 text-sm font-medium">
-            <svg className="w-4 h-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-            Are you sure?
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCancelDelete}
-              className="border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 px-3 py-1 h-7 text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-md hover:shadow-lg transition-all duration-200 px-3 py-1 h-7 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isDeleting ? (
-                <div className="flex items-center">
-                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-                  Deleting...
-                </div>
-              ) : (
-                'Delete'
-              )}
-            </Button>
-          </div>
-        </div>
+        <DeleteConfirmation
+          isDeleting={isDeleting}
+          onCancel={handleCancelDelete}
+          onDelete={handleDelete}
+        />
       ) : (
         <Button
           variant="outline"
@@ -117,6 +137,9 @@ export default function PollActions({ poll }: PollActionsProps) {
           </svg>
           Delete
         </Button>
+      )}
+      {error && (
+        <span className="text-red-600 text-xs ml-2">{error}</span>
       )}
     </div>
   )
