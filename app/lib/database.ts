@@ -101,7 +101,9 @@ export class DatabaseService {
   static async getPolls(
     userId?: string, 
     page: number = 1, 
-    limit: number = 10
+    limit: number = 10,
+    search?: string,
+    filter?: string
   ): Promise<ApiResponse<PaginatedResponse<Poll>>> {
     try {
       const supabase = createClient()
@@ -111,13 +113,30 @@ export class DatabaseService {
         .from('polls')
         .select('*', { count: 'exact' })
 
-      // Filter by user if provided, otherwise show public polls
-      if (userId) {
-        query = query.or(`created_by.eq.${userId},is_public.eq.true`)
-      } else {
-        query = query.eq('is_public', true)
+      // Search functionality
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`)
       }
 
+      // Filter functionality
+      if (filter) {
+        const now = new Date().toISOString()
+        if (filter === 'active') {
+          query = query.eq('is_active', true).or(`expires_at.is.null,expires_at.gt.${now}`)
+        } else if (filter === 'closed') {
+          query = query.or(`is_active.eq.false,expires_at.lte.${now}`)
+        } else if (filter === 'my-polls' && userId) {
+          query = query.eq('created_by', userId)
+        }
+      }
+
+      // Default visibility
+      if (!userId || (filter !== 'my-polls' && !search)) {
+        query = query.or(`created_by.eq.${userId || ''},is_public.eq.true`)
+      } else if (!userId) {
+        query = query.eq('is_public', true)
+      }
+      
       const { data: polls, error, count } = await query
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
@@ -216,6 +235,60 @@ export class DatabaseService {
           message: error instanceof Error ? error.message : 'Failed to delete poll' 
         } 
       }
+    }
+  }
+
+  static async getPollsStats(userId?: string): Promise<ApiResponse<{ totalPolls: number; activePolls: number; totalVotes: number; todayVotes: number; }>> {
+    try {
+      const supabase = createClient();
+      const now = new Date();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const { count: totalPolls, error: totalPollsError } = await supabase
+        .from('polls')
+        .select('id', { count: 'exact', head: true })
+        .or(`created_by.eq.${userId || ''},is_public.eq.true`);
+
+      if (totalPollsError) throw totalPollsError;
+
+      const { count: activePolls, error: activePollsError } = await supabase
+        .from('polls')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
+        .or(`created_by.eq.${userId || ''},is_public.eq.true`);
+
+      if (activePollsError) throw activePollsError;
+
+      const { count: totalVotes, error: totalVotesError } = await supabase
+        .from('votes')
+        .select('id', { count: 'exact', head: true });
+
+      if (totalVotesError) throw totalVotesError;
+
+      const { count: todayVotes, error: todayVotesError } = await supabase
+        .from('votes')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', today.toISOString());
+
+      if (todayVotesError) throw todayVotesError;
+
+      return {
+        data: {
+          totalPolls: totalPolls || 0,
+          activePolls: activePolls || 0,
+          totalVotes: totalVotes || 0,
+          todayVotes: todayVotes || 0,
+        },
+      };
+    } catch (error) {
+      console.error('Error fetching polls stats:', error);
+      return {
+        error: {
+          message: error instanceof Error ? error.message : 'Failed to fetch polls stats',
+        },
+      };
     }
   }
 
